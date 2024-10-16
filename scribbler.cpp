@@ -29,10 +29,14 @@ Scribbler::Scribbler()
 void Scribbler::mouseMoveEvent(QMouseEvent *evt) {
     QGraphicsView::mouseMoveEvent(evt);
     QPointF p = mapToScene(evt->pos());
-    if (!isDots) {
-        QGraphicsLineItem *line = scene.addLine(QLineF(lastPoint, p), QPen(Qt::black, lineWidth, Qt::SolidLine, Qt::FlatCap));
-        lines.append(line);
+    QGraphicsLineItem *line = scene.addLine(QLineF(lastPoint, p), QPen(Qt::black, lineWidth, Qt::SolidLine, Qt::FlatCap));
+    lines.append(line);
+
+    // If we are hiding the lines
+    if (isDots) {
+        line->setVisible(false);
     }
+
     QGraphicsEllipseItem *dot = scene.addEllipse(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)), Qt::NoPen, Qt::black);
     dots.append(dot);
     lastPoint = p;
