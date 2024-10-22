@@ -72,7 +72,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // When Scribbler::endCapture is triggured by menuBar action, scribbler responds with the events data.
     // With events data, process MouseEvents into QTableWidget
-    connect(scribbler, &Scribbler::sendMouseEvents, this, &MainWindow::receiveMouseEvents);
+    connect(scribbler, &Scribbler::updateTabs, this, &MainWindow::updateTabs);
 
     // view modes
     connect(lineViewAct, &QAction::triggered, scribbler, &Scribbler::showLines);
@@ -88,7 +88,7 @@ MainWindow::~MainWindow() {
     settings.setValue("dir", dir);
 }
 
-void MainWindow::receiveMouseEvents(QList<MouseEvent> &events) {
+void MainWindow::updateTabs(QList<MouseEvent> &events) {
     // NO drawings means NO table!
     if (events.isEmpty()) return;
 
@@ -104,7 +104,7 @@ void MainWindow::receiveMouseEvents(QList<MouseEvent> &events) {
     eventsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
     // Sizeof table
-    int colNum = 3;
+    int colNum = 5;
     eventsTable->setRowCount(events.length());
     eventsTable->setColumnCount(colNum);
 
@@ -114,12 +114,16 @@ void MainWindow::receiveMouseEvents(QList<MouseEvent> &events) {
         QTableWidgetItem *posItem = new QTableWidgetItem();
         QTableWidgetItem *actItem = new QTableWidgetItem();
         QTableWidgetItem *timeItem = new QTableWidgetItem();
+        QTableWidgetItem *distItem = new QTableWidgetItem();
+        QTableWidgetItem *speedItem = new QTableWidgetItem();
 
         // Table entry formatting of strings from raw events
         QString posText = QString("(%1, %2)").arg(events[i].pos.x()).arg(events[i].pos.y());
         QString actionText;
         QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events[i].time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
         QString timeText = dateTime.toString("hh:mm:ss"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+        QString distText = QString("%1").arg(events[i].distance);
+        QString speedText = QString::number(events[i].speed, 'f', 2);
 
         // int to string mapping for actions
         switch (events[i].action) {
@@ -137,13 +141,17 @@ void MainWindow::receiveMouseEvents(QList<MouseEvent> &events) {
         posItem->setData(Qt::DisplayRole, posText);
         actItem->setData(Qt::DisplayRole, actionText);
         timeItem->setData(Qt::DisplayRole, timeText);
+        distItem->setData(Qt::DisplayRole, distText);
+        speedItem->setData(Qt::DisplayRole, speedText);
 
         eventsTable->setItem(i, 0, posItem);
         eventsTable->setItem(i, 1, actItem);
         eventsTable->setItem(i, 2, timeItem);
+        eventsTable->setItem(i, 3, distItem);
+        eventsTable->setItem(i, 4, speedItem);
     }
     // Table headers
-    QList<QString> tableLabels = {"Position", "Action", "Time"};
+    QList<QString> tableLabels = {"Position", "Action", "Time", "Distance", "Speed"};
     eventsTable->setHorizontalHeaderLabels(tableLabels);
     eventsTable->setMinimumSize(400, 600);
 
@@ -164,7 +172,7 @@ void MainWindow::resetFile() {
 
 void MainWindow::saveFile() {
     // Outfile stuff for saving
-    QString outFName = QFileDialog::getSaveFileName(this, "Save scribble file");
+    QString outFName = QFileDialog::getSaveFileName(this, "Save scribble file", dir);
     if (outFName.isEmpty()) return;
 
     // Error handling for bad file
@@ -192,6 +200,8 @@ void MainWindow::saveFile() {
             saveOut << event.pos;
             saveOut << event.action;
             saveOut << event.time;
+            saveOut << event.distance;
+            saveOut << event.speed;
         }
     }
     outFile.close();
@@ -237,7 +247,7 @@ void MainWindow::openFile() {
         eventsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
         // Set size of table
-        int colCount = 3;
+        int colCount = 5;
         eventsTable->setColumnCount(colCount);
         eventsTable->setRowCount(eventsCount);
 
@@ -246,25 +256,33 @@ void MainWindow::openFile() {
             QPointF pos;
             int action;
             quint64 time;
+            float distance;
+            float speed;
 
             // extract from stream data on event
             openIn >> pos;
             openIn >> action;
             openIn >> time;
+            openIn >> distance;
+            openIn >> speed;
 
             // create new event corresponding in saved events
-            events->append(MouseEvent(action, pos, time));
+            events->append(MouseEvent(action, pos, time, distance, speed));
 
             // tableWidget entry stuff
             QTableWidgetItem *posItem = new QTableWidgetItem();
             QTableWidgetItem *actItem = new QTableWidgetItem();
             QTableWidgetItem *timeItem = new QTableWidgetItem();
+            QTableWidgetItem *distItem = new QTableWidgetItem();
+            QTableWidgetItem *speedItem = new QTableWidgetItem();
 
             // Formatting to QString for text in table entry
             QString posText = QString("(%1, %2)").arg(events->at(i).pos.x()).arg(events->at(i).pos.y());
             QString actionText;
             QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events->at(i).time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
             QString timeText = dateTime.toString("hh:mm:ss"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+            QString distText = QString("%1").arg(distance);
+            QString speedText = QString::number(speed, 'f', 2);
 
             // int to string mapping for actions
             switch (events->at(i).action) {
@@ -282,19 +300,24 @@ void MainWindow::openFile() {
             posItem->setData(Qt::DisplayRole, posText);
             actItem->setData(Qt::DisplayRole, actionText);
             timeItem->setData(Qt::DisplayRole, timeText);
+            distItem->setData(Qt::DisplayRole, distText);
+            speedItem->setData(Qt::DisplayRole, speedText);
 
             eventsTable->setItem(i, 0, posItem);
             eventsTable->setItem(i, 1, actItem);
             eventsTable->setItem(i, 2, timeItem);
+            eventsTable->setItem(i, 3, distItem);
+            eventsTable->setItem(i, 4, speedItem);
         }
         // Table headers
-        QList<QString> tableLabels = {"Position", "Action", "Time"};
+        QList<QString> tableLabels = {"Position", "Action", "Time", "Distance", "Speed"};
         eventsTable->setHorizontalHeaderLabels(tableLabels);
         eventsTable->setMinimumSize(400, 600);
 
         // updating storedEvents to reflect most recent loaded events tab + adding label, etc...
         storedEvents.append(events);
-        tabWidget->addTab(eventsTable, QString::number(tabIdx));
+        QString tabName = QString::number(tabIdx);
+        tabWidget->addTab(eventsTable, tabName);
         tabWidget->setHidden(false);
         tabWidget->show();
         ++tabCount;

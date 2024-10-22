@@ -9,13 +9,17 @@ public:
     enum {
         Press,
         Move,
-        Release
+        Release,
+        Distance,
+        Speed,
     };
     int action;
     QPointF pos;
     quint64 time;
+    float distance;
+    float speed;
 
-    MouseEvent(int _action, QPointF _pos, quint64 _time);
+    MouseEvent(int _action, QPointF _pos, quint64 _time, float _distance, float _speed);
 
     friend QDataStream &operator<<(QDataStream &out, const MouseEvent &evt);
     friend QDataStream &operator>>(QDataStream &in, const MouseEvent &evt);
@@ -26,6 +30,9 @@ class Scribbler : public QGraphicsView
     QGraphicsScene scene;
     double lineWidth;
     QPointF lastPoint;
+    float distance;
+    float speed;
+    quint64 prevTimestamp;
     QList<MouseEvent> events;
     bool isDots;
 
@@ -54,7 +61,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *evt) override;
 
 signals:
-    void sendMouseEvents(QList<MouseEvent> &events);
+    void updateTabs(QList<MouseEvent> &events);
     void resetFile();
 };
 

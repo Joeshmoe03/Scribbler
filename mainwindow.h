@@ -23,7 +23,7 @@ public:
     void openFile();
 
 public slots:
-    void receiveMouseEvents(QList<MouseEvent> &events);
+    void updateTabs(QList<MouseEvent> &events);
     void resetFile();
 
 signals:
