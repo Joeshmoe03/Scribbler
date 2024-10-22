@@ -4,20 +4,29 @@
 #include "scribbler.h"
 
 #include <QMainWindow>
+#include <QTableWidget>
 #include <QGraphicsScene>
 
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
 
-    QList<MouseEvent> storedEvents;
+    QList<QList<MouseEvent>*> storedEvents;
     QTabWidget *tabWidget;
+    QString dir;
+    int tabCount;
 
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+    void saveFile();
+    void openFile();
 
 public slots:
-    void receiveEvents(QList<MouseEvent> &data);
+    void receiveMouseEvents(QList<MouseEvent> &events);
+    void resetFile();
+
+signals:
+    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents);
 };
 #endif // MAINWINDOW_H

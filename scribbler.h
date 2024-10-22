@@ -2,6 +2,7 @@
 #define SCRIBBLER_H
 
 #include <QGraphicsView>
+#include <QTableWidget>
 
 class MouseEvent {
 public:
@@ -35,13 +36,17 @@ class Scribbler : public QGraphicsView
 
 public:
     Scribbler();
+
+    void resetScribbler();
+
     void startCapture();
     void endCapture();
-    void openFile();
-    void saveFile();
-    void resetFile();
+
     void showLines();
     void showDots();
+
+public slots:
+    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents);
 
 protected:
     void mouseMoveEvent(QMouseEvent *evt) override;
@@ -49,7 +54,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *evt) override;
 
 signals:
-    void reportEvents(QList<MouseEvent> &data);
+    void sendMouseEvents(QList<MouseEvent> &events);
+    void resetFile();
 };
 
 #endif // SCRIBBLER_H
