@@ -14,11 +14,11 @@ MainWindow::MainWindow(QWidget *parent)
     QAction *resetFileAct = new QAction("Reset file");
 
     // Our capture actions
-    QAction *startCapture = new QAction("Start capture");
+    QAction *resetCapture = new QAction("Reset capture");
     QAction *endCapture = new QAction("End capture");
 
     // Our view mode actions
-    QAction *lineViewAct = new QAction("Line View");
+    QAction *lineViewAct = new QAction("Line view");
     QAction *dotsViewAct = new QAction("Dots only view");
 
     // The menus for these actions
@@ -52,8 +52,8 @@ MainWindow::MainWindow(QWidget *parent)
     fileBar->addAction(resetFileAct);
     resetFileAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
 
-    captureBar->addAction(startCapture);
-    startCapture->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
+    captureBar->addAction(resetCapture);
+    resetCapture->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     captureBar->addAction(endCapture);
     endCapture->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
 
@@ -75,7 +75,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(scribbler, &Scribbler::resetFile, this, &MainWindow::resetFile);
 
     // deal with start/end captures and redrawing upon openFile
-    connect(startCapture, &QAction::triggered, scribbler, &Scribbler::startCapture);
+    connect(resetCapture, &QAction::triggered, scribbler, &Scribbler::resetCapture);
     connect(endCapture, &QAction::triggered, scribbler, &Scribbler::endCapture);
 
     // When Scribbler::endCapture is triggured by menuBar action, scribbler responds with the events data.
@@ -91,6 +91,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(lineViewAct, &QAction::triggered, scribbler, &Scribbler::showLines);
     connect(dotsViewAct, &QAction::triggered, scribbler, &Scribbler::showDots);
 
+    // remove highlight after tab change
+    connect(this, &MainWindow::restoreColor, scribbler, &Scribbler::restoreColor);
+
     // directory persistence
     QSettings settings("JKW Systems", "Graphics1");
     dir = settings.value("dir", "").toString();
@@ -103,6 +106,7 @@ MainWindow::~MainWindow() {
 
 void MainWindow::changeTab() {
     int tabIdx = tabWidget->currentIndex();
+    emit restoreColor();
     emit adjustOpacity(tabIdx);
 }
 

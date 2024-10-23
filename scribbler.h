@@ -50,7 +50,7 @@ public:
 
     void resetScribbler();
 
-    void startCapture();
+    void resetCapture();
     void endCapture();
 
     void showLines();
@@ -60,6 +60,7 @@ public slots:
     void drawFromEvents(QList<QList<MouseEvent*>*> &storedEvents);
     void adjustOpacity(int currentTabIdx);
     void highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, QList<QList<MouseEvent*>*> &storedEvents);
+    void restoreColor();
 
 protected:
     void mouseMoveEvent(QMouseEvent *evt) override;

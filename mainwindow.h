@@ -32,5 +32,6 @@ signals:
     void adjustOpacity(int currentTabIdx);
     void drawFromEvents(QList<QList<MouseEvent*>*> &storedEvents);
     void highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, QList<QList<MouseEvent*>*> &storedEvents);
+    void restoreColor();
 };
 #endif // MAINWINDOW_H

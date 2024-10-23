@@ -92,6 +92,17 @@ void Scribbler::mouseReleaseEvent(QMouseEvent *evt) {
     events << new MouseEvent(MouseEvent::Release, p, evt->timestamp(), distance, speed, QList<QGraphicsItem*>{});
 }
 
+void Scribbler::restoreColor() {
+    for (QGraphicsLineItem *line : lines) {
+        line->setPen(QPen(Qt::black, lineWidth, Qt::SolidLine, Qt::FlatCap));
+    }
+
+    for (QGraphicsEllipseItem *dot : dots) {
+        dot->setPen(QPen(Qt::black));
+        dot->setBrush(QBrush(Qt::black));
+    }
+}
+
 void Scribbler::highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, QList<QList<MouseEvent*>*> &storedEvents) {
     for (int eventsIdx = 0; eventsIdx < storedEvents.length(); ++eventsIdx) {
         QList<MouseEvent*> *events = storedEvents[eventsIdx];
@@ -99,11 +110,14 @@ void Scribbler::highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, Q
         for (int eventIdx = 0; eventIdx < events->length(); ++eventIdx) {
             MouseEvent *event = events->at(eventIdx);
             QBrush color;
+            QPen pen;
 
             if (currentTabIdx == eventsIdx && eventIdx >= rowSlice.first && eventIdx <= rowSlice.second) {
                 color = Qt::red;
+                pen = QPen(Qt::red);
             } else {
                 color = Qt::black;
+                pen = QPen(Qt::black);
             }
 
             QList<QGraphicsItem*> graphicsItems;
@@ -112,6 +126,7 @@ void Scribbler::highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, Q
             for (QGraphicsItem* graphicsItem : graphicsItems) {
                 if (graphicsItem->type() == QGraphicsEllipseItem::Type) {
                     QGraphicsEllipseItem *dot = (QGraphicsEllipseItem*)graphicsItem;
+                    dot->setPen(pen);
                     dot->setBrush(QBrush(color));
                 }
                 else if (graphicsItem->type() == QGraphicsLineItem::Type) {
@@ -146,10 +161,23 @@ void Scribbler::resetScribbler() {
     emit resetFile();
 }
 
-void Scribbler::startCapture() {
-    // delete graphicsGroup; // discard the graphics Group not captured?
-    // graphicsGroup = new QGraphicsItemGroup();
-    // scene.addItem(graphicsGroup);
+void Scribbler::resetCapture() {
+    QList<QGraphicsItem*> groupItems;
+    groupItems << graphicsGroup->childItems();
+
+    // Clear the corresponding item from lines and dots to prevent conflicts when removing those dots and lines on resetCapture
+    for (QGraphicsItem *item : groupItems) {
+        if (lines.contains(item)) {
+            lines.removeAll(item);
+        }
+        if (dots.contains(item)) {
+            dots.removeAll(item);
+        }
+    }
+
+    delete graphicsGroup; // discard the graphics Group not captured?
+    graphicsGroup = new QGraphicsItemGroup();
+    scene.addItem(graphicsGroup);
     events.clear();
 }
 
