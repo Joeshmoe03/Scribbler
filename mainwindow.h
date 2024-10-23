@@ -21,12 +21,13 @@ public:
     ~MainWindow();
     void saveFile();
     void openFile();
+    void changeTab();
 
 public slots:
-    void updateTabs(QList<MouseEvent> &events);
+    void addTab(QList<MouseEvent> &events);
     void resetFile();
 
 signals:
-    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents);
+    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx);
 };
 #endif // MAINWINDOW_H

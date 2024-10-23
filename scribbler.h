@@ -53,7 +53,7 @@ public:
     void showDots();
 
 public slots:
-    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents);
+    void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx);
 
 protected:
     void mouseMoveEvent(QMouseEvent *evt) override;
@@ -61,7 +61,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent *evt) override;
 
 signals:
-    void updateTabs(QList<MouseEvent> &events);
+    void addTab(QList<MouseEvent> &events);
     void resetFile();
 };
 

@@ -86,7 +86,7 @@ void Scribbler::startCapture() {
 
 /* One endCapture, scribbler sends data and clear QList<MouseEvent> */
 void Scribbler::endCapture() {
-    emit updateTabs(events);
+    emit addTab(events);
     events.clear();
 }
 
@@ -118,8 +118,8 @@ void Scribbler::showLines() {
     }
 }
 
-void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents) {
-    // reset before redrawing after loading old file
+void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx) {
+    // reset before redrawing after loading old file or dealing with opacity
     events.clear();
     scene.clear();
     dots.clear();
@@ -127,8 +127,8 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents) {
     showLines();
 
     // stored events across multiple tabs
-    for (QList<QList<MouseEvent>*>::Iterator eventsIt = storedEvents.begin(); eventsIt != storedEvents.end(); ++eventsIt) {
-        QList<MouseEvent> *events = *eventsIt;
+    for (int eventsIdx = 0; eventsIdx < storedEvents.length(); ++eventsIdx) {
+        QList<MouseEvent> *events = storedEvents[eventsIdx];
 
         // deal with event in given events of a tab
         for (QList<MouseEvent>::Iterator eventIt = events->begin(); eventIt != events->end(); ++eventIt) {
@@ -142,6 +142,9 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents) {
 
                     // dots of Press
                     QGraphicsEllipseItem *dot = scene.addEllipse(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)), Qt::NoPen, Qt::black);
+                    if (eventsIdx != currentTabIdx) {
+                        dot->setOpacity(0.25);
+                    }
                     dots.append(dot);
                     break;
                 }
@@ -154,6 +157,10 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents) {
                     QGraphicsEllipseItem *dot = scene.addEllipse(QRectF(p - QPointF(0.5*lineWidth, 0.5*lineWidth), QSizeF(lineWidth, lineWidth)), Qt::NoPen, Qt::black);
                     dots.append(dot);
                     lastPoint = p;
+                    if (eventsIdx != currentTabIdx) {
+                        dot->setOpacity(0.25);
+                        line->setOpacity(0.25);
+                    }
                     break;
                 }
                 case MouseEvent::Release: {

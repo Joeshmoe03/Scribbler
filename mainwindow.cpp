@@ -72,7 +72,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // When Scribbler::endCapture is triggured by menuBar action, scribbler responds with the events data.
     // With events data, process MouseEvents into QTableWidget
-    connect(scribbler, &Scribbler::updateTabs, this, &MainWindow::updateTabs);
+    connect(scribbler, &Scribbler::addTab, this, &MainWindow::addTab);
+    connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::changeTab); //TEST
 
     // view modes
     connect(lineViewAct, &QAction::triggered, scribbler, &Scribbler::showLines);
@@ -88,7 +89,11 @@ MainWindow::~MainWindow() {
     settings.setValue("dir", dir);
 }
 
-void MainWindow::updateTabs(QList<MouseEvent> &events) {
+void MainWindow::changeTab() {
+    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
+}
+
+void MainWindow::addTab(QList<MouseEvent> &events) {
     // NO drawings means NO table!
     if (events.isEmpty()) return;
 
@@ -121,7 +126,7 @@ void MainWindow::updateTabs(QList<MouseEvent> &events) {
         QString posText = QString("(%1, %2)").arg(events[i].pos.x()).arg(events[i].pos.y());
         QString actionText;
         QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events[i].time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
-        QString timeText = dateTime.toString("hh:mm:ss"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+        QString timeText = dateTime.toString("s.zzz"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
         QString distText = QString("%1").arg(events[i].distance);
         QString speedText = QString::number(events[i].speed, 'f', 2);
 
@@ -151,16 +156,19 @@ void MainWindow::updateTabs(QList<MouseEvent> &events) {
         eventsTable->setItem(i, 4, speedItem);
     }
     // Table headers
-    QList<QString> tableLabels = {"Position", "Action", "Time", "Distance", "Speed"};
+    QList<QString> tableLabels = {"Position", "Action", "Time(s)", "Distance(pix)", "Speed(pix/ms)"};
     eventsTable->setHorizontalHeaderLabels(tableLabels);
     eventsTable->setMinimumSize(400, 600);
 
     // updating adding label, etc... TabWidget is newly generated -> make visible.
-    QString tabName = QString::number(tabCount);
+    QString tabName = "Brush " + QString::number(tabCount);
     tabWidget->addTab(eventsTable, tabName);
     tabWidget->setHidden(false);
     tabWidget->show();
     ++tabCount;
+
+    // Adding a tab should ensure corresponding capture is redrwan at right opacity
+    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
 }
 
 void MainWindow::resetFile() {
@@ -280,7 +288,7 @@ void MainWindow::openFile() {
             QString posText = QString("(%1, %2)").arg(events->at(i).pos.x()).arg(events->at(i).pos.y());
             QString actionText;
             QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events->at(i).time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
-            QString timeText = dateTime.toString("hh:mm:ss"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+            QString timeText = dateTime.toString("s.zzz"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
             QString distText = QString("%1").arg(distance);
             QString speedText = QString::number(speed, 'f', 2);
 
@@ -310,13 +318,13 @@ void MainWindow::openFile() {
             eventsTable->setItem(i, 4, speedItem);
         }
         // Table headers
-        QList<QString> tableLabels = {"Position", "Action", "Time", "Distance", "Speed"};
+        QList<QString> tableLabels = {"Position", "Action", "Time(s)", "Distance(pix)", "Speed(pix/ms)"};
         eventsTable->setHorizontalHeaderLabels(tableLabels);
         eventsTable->setMinimumSize(400, 600);
 
         // updating storedEvents to reflect most recent loaded events tab + adding label, etc...
         storedEvents.append(events);
-        QString tabName = QString::number(tabIdx);
+        QString tabName = "Brush " + QString::number(tabIdx);
         tabWidget->addTab(eventsTable, tabName);
         tabWidget->setHidden(false);
         tabWidget->show();
@@ -324,5 +332,5 @@ void MainWindow::openFile() {
     }
     inFile.close();
     // send signal to scribbler so that it canr redraw with tabs info
-    emit drawFromEvents(storedEvents);
+    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
 }
