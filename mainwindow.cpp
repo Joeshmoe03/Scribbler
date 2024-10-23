@@ -46,14 +46,21 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Add our actions to menubar
     fileBar->addAction(openFileAct);
+    openFileAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_O));
     fileBar->addAction(saveFileAct);
+    saveFileAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
     fileBar->addAction(resetFileAct);
+    resetFileAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
 
     captureBar->addAction(startCapture);
+    startCapture->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_B));
     captureBar->addAction(endCapture);
+    endCapture->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_E));
 
     viewBar->addAction(lineViewAct);
+    lineViewAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_L));
     viewBar->addAction(dotsViewAct);
+    dotsViewAct->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_D));
 
     menuBar()->addMenu(fileBar);
     menuBar()->addMenu(captureBar);
@@ -75,11 +82,12 @@ MainWindow::MainWindow(QWidget *parent)
     // With events data, process MouseEvents into QTableWidget
     connect(scribbler, &Scribbler::addTab, this, &MainWindow::addTab);
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::changeTab); //TEST
+    connect(this, &MainWindow::highlightScribble, scribbler, &Scribbler::highlightScribble);
 
     // adjust opacity on tab selection
     connect(this, &MainWindow::adjustOpacity, scribbler, &Scribbler::adjustOpacity);
 
-    // view modes
+    // view modes: dots or lines
     connect(lineViewAct, &QAction::triggered, scribbler, &Scribbler::showLines);
     connect(dotsViewAct, &QAction::triggered, scribbler, &Scribbler::showDots);
 
@@ -98,18 +106,34 @@ void MainWindow::changeTab() {
     emit adjustOpacity(tabIdx);
 }
 
-void MainWindow::addTab(QList<MouseEvent> &events) {
+void MainWindow::itemSelectionChanged() {
+    QTableWidget *eventsTable = (QTableWidget*)tabWidget->currentWidget();
+
+    // error handle
+    if (!eventsTable) return;
+
+    QList<QTableWidgetSelectionRange> selectedRanges = eventsTable->selectedRanges(); //https://doc.qt.io/qt-6/qtablewidgetselectionrange.html
+    for (QTableWidgetSelectionRange &range : selectedRanges) {
+        QPair<int, int> rowRange = QPair<int, int>(range.topRow(), range.bottomRow());
+        emit highlightScribble(tabWidget->currentIndex(), rowRange, storedEvents);
+    }
+}
+
+void MainWindow::addTab(QList<MouseEvent*> &events) {
     // NO drawings means NO table!
     if (events.isEmpty()) return;
 
     // events may be cleared by scribbler. Keep a copy of it to refer to in storedEvents. storedEvents to refer to events of other tabs later.
-    QList<MouseEvent> *eventsCopy = new QList<MouseEvent>(events);
+    QList<MouseEvent*> *eventsCopy = new QList<MouseEvent*>(events);
     storedEvents.append(eventsCopy);
 
     // Our table has as many rows as there are MouseEvents. There are 3 things: pos, action, time in MouseEvents to display
     QTableWidget *eventsTable = new QTableWidget();
 
+    connect(eventsTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::itemSelectionChanged); //TEST
+
     // Stretching automatically
+    eventsTable->setSelectionMode(QAbstractItemView::ExtendedSelection);
     eventsTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // https://stackoverflow.com/questions/3862900/how-to-disable-edit-mode-in-the-qtableview
     eventsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
@@ -128,15 +152,15 @@ void MainWindow::addTab(QList<MouseEvent> &events) {
         QTableWidgetItem *speedItem = new QTableWidgetItem();
 
         // Table entry formatting of strings from raw events
-        QString posText = QString("(%1, %2)").arg(events[i].pos.x()).arg(events[i].pos.y());
+        QString posText = QString("(%1, %2)").arg(events[i]->pos.x()).arg(events[i]->pos.y());
         QString actionText;
-        QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events[i].time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+        QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events[i]->time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
         QString timeText = dateTime.toString("s.zzz"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
-        QString distText = QString("%1").arg(events[i].distance);
-        QString speedText = QString::number(events[i].speed, 'f', 2);
+        QString distText = QString("%1").arg(events[i]->distance);
+        QString speedText = QString::number(events[i]->speed, 'f', 2);
 
         // int to string mapping for actions
-        switch (events[i].action) {
+        switch (events[i]->action) {
             case MouseEvent::Press:
                 actionText = "Press";
                 break;
@@ -199,20 +223,20 @@ void MainWindow::saveFile() {
     saveOut << numTabs;
 
     // Iterate over all events in the list of copied *events
-    for (QList<QList<MouseEvent>*>::Iterator eventsIt = storedEvents.begin(); eventsIt != storedEvents.end(); ++eventsIt) {
-        QList<MouseEvent> *events = *eventsIt;
+    for (QList<QList<MouseEvent*>*>::Iterator eventsIt = storedEvents.begin(); eventsIt != storedEvents.end(); ++eventsIt) {
+        QList<MouseEvent*> *events = *eventsIt;
 
         // Save size of events to file
         int eventsCount = events->length();
         saveOut << eventsCount;
 
         // Save individual events to file
-        for (MouseEvent &event : *events) {
-            saveOut << event.pos;
-            saveOut << event.action;
-            saveOut << event.time;
-            saveOut << event.distance;
-            saveOut << event.speed;
+        for (MouseEvent *event : *events) {
+            saveOut << event->pos;
+            saveOut << event->action;
+            saveOut << event->time;
+            saveOut << event->distance;
+            saveOut << event->speed;
         }
     }
     outFile.close();
@@ -253,8 +277,10 @@ void MainWindow::openFile() {
 
         QTableWidget *eventsTable = new QTableWidget();
 
+        connect(eventsTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::itemSelectionChanged);
+
         // Stretching automatically
-        eventsTable->setEditTriggers(QAbstractItemView::NoEditTriggers); // https://stackoverflow.com/questions/3862900/how-to-disable-edit-mode-in-the-qtableview
+        eventsTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
         eventsTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
         // Set size of table
@@ -262,7 +288,7 @@ void MainWindow::openFile() {
         eventsTable->setColumnCount(colCount);
         eventsTable->setRowCount(eventsCount);
 
-        QList<MouseEvent> *events = new QList<MouseEvent>();
+        QList<MouseEvent*> *events = new QList<MouseEvent*>();
         for (int i = 0; i < eventsCount; ++i) {
             QPointF pos;
             int action;
@@ -278,7 +304,7 @@ void MainWindow::openFile() {
             openIn >> speed;
 
             // create new event corresponding in saved events
-            events->append(MouseEvent(action, pos, time, distance, speed));
+            events->append(new MouseEvent(action, pos, time, distance, speed, QList<QGraphicsItem*>{}));
 
             // tableWidget entry stuff
             QTableWidgetItem *posItem = new QTableWidgetItem();
@@ -288,15 +314,15 @@ void MainWindow::openFile() {
             QTableWidgetItem *speedItem = new QTableWidgetItem();
 
             // Formatting to QString for text in table entry
-            QString posText = QString("(%1, %2)").arg(events->at(i).pos.x()).arg(events->at(i).pos.y());
+            QString posText = QString("(%1, %2)").arg(events->at(i)->pos.x()).arg(events->at(i)->pos.y());
             QString actionText;
-            QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events->at(i).time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
+            QDateTime dateTime = QDateTime::fromMSecsSinceEpoch(events->at(i)->time); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
             QString timeText = dateTime.toString("s.zzz"); //FROM: https://forum.qt.io/topic/77685/qtime-formatting-hh-mm-ss-s
             QString distText = QString("%1").arg(distance);
             QString speedText = QString::number(speed, 'f', 2);
 
             // int to string mapping for actions
-            switch (events->at(i).action) {
+            switch (events->at(i)->action) {
             case MouseEvent::Press:
                 actionText = "Press";
                 break;
@@ -334,6 +360,8 @@ void MainWindow::openFile() {
         ++tabCount;
     }
     inFile.close();
-    // send signal to scribbler so that it canr redraw with tabs info
-    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
+
+    // send signal to scribbler so that it canr redraw with tabs info from file and also adjust opacity with tabs on start
+    emit drawFromEvents(storedEvents);
+    emit adjustOpacity(tabWidget->currentIndex());
 }

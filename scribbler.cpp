@@ -3,8 +3,8 @@
 #include <QtWidgets>
 #include <math.h>
 
-MouseEvent::MouseEvent(int _action, QPointF _pos, quint64 _time, float _distance, float _speed)
-    : action(_action), pos(_pos), time(_time), distance(_distance), speed(_speed) {}
+MouseEvent::MouseEvent(int _action, QPointF _pos, quint64 _time, float _distance, float _speed, QList<QGraphicsItem*> _graphicsItems)
+    : action(_action), pos(_pos), time(_time), distance(_distance), speed(_speed), graphicsItems(_graphicsItems) {}
 
 QDataStream &operator<<(QDataStream &out, const MouseEvent &evt) {
     return out << evt.action << evt.pos << evt.time << evt.distance << evt.speed;
@@ -24,6 +24,8 @@ Scribbler::Scribbler()
     setRenderHint(QPainter::Antialiasing, true);
     setBackgroundBrush(Qt::white);
     scene.addRect(sceneRect());
+
+    // We store dots and lines in graphicsGroup in a list for corresponding capture.
     graphicsGroup = new QGraphicsItemGroup();
     scene.addItem(graphicsGroup);
 }
@@ -52,11 +54,12 @@ void Scribbler::mouseMoveEvent(QMouseEvent *evt) {
 
     distance = sqrt(pow(p.x() - lastPoint.x(), 2.0) + pow(p.y() - lastPoint.y(), 2.0));
     lastPoint = p;
-    speed = distance / (float)(evt->timestamp() - prevTimestamp);
+    float timeDiff = (float)(evt->timestamp() - prevTimestamp);
+    if (timeDiff == 0) timeDiff = 1; //prevent zero division
+    speed = distance / timeDiff;
     prevTimestamp = evt->timestamp();
 
-
-    events << MouseEvent(MouseEvent::Move, p, evt->timestamp(), distance, speed);
+    events << new MouseEvent(MouseEvent::Move, p, evt->timestamp(), distance, speed, QList<QGraphicsItem*>{dot, line});
 }
 
 void Scribbler::mousePressEvent(QMouseEvent *evt) {
@@ -75,16 +78,49 @@ void Scribbler::mousePressEvent(QMouseEvent *evt) {
     speed = 0.0;
     prevTimestamp = evt->timestamp();
 
-    events << MouseEvent(MouseEvent::Press, p, evt->timestamp(), distance, speed);
+    events << new MouseEvent(MouseEvent::Press, p, evt->timestamp(), distance, speed, QList<QGraphicsItem*>{dot});
 }
 
 void Scribbler::mouseReleaseEvent(QMouseEvent *evt) {
     QGraphicsView::mouseReleaseEvent(evt);
     QPointF p = mapToScene(evt->pos());
     distance = sqrt(pow(p.x() - lastPoint.x(), 2.0) + pow(p.y() - lastPoint.y(), 2.0));
-    speed = distance / (float)(evt->timestamp() - prevTimestamp);
+    float timeDiff = (float)(evt->timestamp() - prevTimestamp);
+    if (timeDiff == 0) timeDiff = 1; //prevent zero division
+    speed = distance / timeDiff;
 
-    events << MouseEvent(MouseEvent::Release, p, evt->timestamp(), distance, speed);
+    events << new MouseEvent(MouseEvent::Release, p, evt->timestamp(), distance, speed, QList<QGraphicsItem*>{});
+}
+
+void Scribbler::highlightScribble(int currentTabIdx, QPair<int, int> rowSlice, QList<QList<MouseEvent*>*> &storedEvents) {
+    for (int eventsIdx = 0; eventsIdx < storedEvents.length(); ++eventsIdx) {
+        QList<MouseEvent*> *events = storedEvents[eventsIdx];
+
+        for (int eventIdx = 0; eventIdx < events->length(); ++eventIdx) {
+            MouseEvent *event = events->at(eventIdx);
+            QBrush color;
+
+            if (currentTabIdx == eventsIdx && eventIdx >= rowSlice.first && eventIdx <= rowSlice.second) {
+                color = Qt::red;
+            } else {
+                color = Qt::black;
+            }
+
+            QList<QGraphicsItem*> graphicsItems;
+            graphicsItems << event->graphicsItems;
+
+            for (QGraphicsItem* graphicsItem : graphicsItems) {
+                if (graphicsItem->type() == QGraphicsEllipseItem::Type) {
+                    QGraphicsEllipseItem *dot = (QGraphicsEllipseItem*)graphicsItem;
+                    dot->setBrush(QBrush(color));
+                }
+                else if (graphicsItem->type() == QGraphicsLineItem::Type) {
+                    QGraphicsLineItem *line = (QGraphicsLineItem*)graphicsItem;
+                    line->setPen(QPen(color, lineWidth, Qt::SolidLine, Qt::FlatCap));
+                }
+            }
+        }
+    }
 }
 
 void Scribbler::adjustOpacity(int currentTabIdx) {
@@ -111,11 +147,18 @@ void Scribbler::resetScribbler() {
 }
 
 void Scribbler::startCapture() {
+    // delete graphicsGroup; // discard the graphics Group not captured?
+    // graphicsGroup = new QGraphicsItemGroup();
+    // scene.addItem(graphicsGroup);
     events.clear();
 }
 
 /* One endCapture, scribbler sends data and clear QList<MouseEvent> */
 void Scribbler::endCapture() {
+    // don't capture for empty graphicsGroup
+    if (events.isEmpty()) return;
+
+    // reset graphicsGroup for new capture
     graphicsGroups.append(graphicsGroup);
     graphicsGroup = new QGraphicsItemGroup();
     scene.addItem(graphicsGroup);
@@ -126,11 +169,6 @@ void Scribbler::endCapture() {
 void Scribbler::showDots() {
     isDots = true;
 
-    for (int i = 0; i < dots.length(); ++i) {
-        QGraphicsEllipseItem *dot = dots[i];
-        dot->setVisible(true);
-    }
-
     for (int i = 0; i < lines.length(); ++i) {
         QGraphicsLineItem *line = lines[i];
         line->setVisible(false);
@@ -140,18 +178,13 @@ void Scribbler::showDots() {
 void Scribbler::showLines() {
     isDots = false;
 
-    for (int i = 0; i < dots.length(); ++i) {
-        QGraphicsEllipseItem *dot = dots[i];
-        dot->setVisible(true);
-    }
-
     for (int i = 0; i < lines.length(); ++i) {
         QGraphicsLineItem *line = lines[i];
         line->setVisible(true);
     }
 }
 
-void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx) {
+void Scribbler::drawFromEvents(QList<QList<MouseEvent*>*> &storedEvents) {
     // reset before redrawing after loading old file or dealing with opacity
     events.clear();
     scene.clear();
@@ -165,17 +198,19 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int curr
 
     // stored events across multiple tabs
     for (int eventsIdx = 0; eventsIdx < storedEvents.length(); ++eventsIdx) {
-        QList<MouseEvent> *events = storedEvents[eventsIdx];
+        QList<MouseEvent*>*events = storedEvents[eventsIdx];
+
+        // We store dots and lines in graphicsGroup in a list for corresponding capture. We must iterate thru captures and reform these QItemGroups from storedEvents
         graphicsGroup = new QGraphicsItemGroup();
         scene.addItem(graphicsGroup);
 
         // deal with event in given events of a tab
-        for (QList<MouseEvent>::Iterator eventIt = events->begin(); eventIt != events->end(); ++eventIt) {
-            MouseEvent &event = *eventIt;
-            QPointF p = event.pos;
+        for (int eventIdx = 0; eventIdx < events->length(); ++eventIdx) {
+            MouseEvent *event = events->at(eventIdx);
+            QPointF p = event->pos;
 
             // Press actions add only dot. Move creates lines too
-            switch (event.action) {
+            switch (event->action) {
                 case MouseEvent::Press: {
                     lastPoint = p;
 
@@ -186,6 +221,7 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int curr
 
                     dots.append(dot);
                     graphicsGroup->addToGroup(dot);
+                    event->graphicsItems.append(dot);
                     break;
                 }
                 case MouseEvent::Move: {
@@ -203,8 +239,9 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int curr
 
                     dots.append(dot);
                     graphicsGroup->addToGroup(dot);
+                    event->graphicsItems.append(dot);
+                    event->graphicsItems.append(line);
                     lastPoint = p;
-
                     break;
                 }
                 case MouseEvent::Release: {
@@ -214,8 +251,7 @@ void Scribbler::drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int curr
         }
         graphicsGroups.append(graphicsGroup);
     }
-    // new graphicsGroup to prevent new modifications of file from being including in previous modifications
+    // new graphicsGroup to prevent new modifications of file from being included in previous modifications
     graphicsGroup = new QGraphicsItemGroup();
     scene.addItem(graphicsGroup);
-    adjustOpacity(currentTabIdx);
 }
