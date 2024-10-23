@@ -38,6 +38,8 @@ class Scribbler : public QGraphicsView
 
     QList<QGraphicsEllipseItem*> dots;
     QList<QGraphicsLineItem*> lines;
+    QList<QGraphicsItemGroup*> graphicsGroups;
+    QGraphicsItemGroup *graphicsGroup;
 
     Q_OBJECT
 
@@ -54,6 +56,7 @@ public:
 
 public slots:
     void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx);
+    void adjustOpacity(int currentTabIdx);
 
 protected:
     void mouseMoveEvent(QMouseEvent *evt) override;

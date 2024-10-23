@@ -28,6 +28,7 @@ public slots:
     void resetFile();
 
 signals:
+    void adjustOpacity(int currentTabIdx);
     void drawFromEvents(QList<QList<MouseEvent>*> &storedEvents, int currentTabIdx);
 };
 #endif // MAINWINDOW_H

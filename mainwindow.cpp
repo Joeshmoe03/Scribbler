@@ -61,6 +61,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Connect for signals and slots for actions w.r.t. Scribbler
     connect(openFileAct, &QAction::triggered, this, &MainWindow::openFile);
+    connect(this, &MainWindow::drawFromEvents, scribbler, &Scribbler::drawFromEvents);
+
     connect(saveFileAct, &QAction::triggered, this, &MainWindow::saveFile);
     connect(resetFileAct, &QAction::triggered, scribbler, &Scribbler::resetScribbler);
     connect(scribbler, &Scribbler::resetFile, this, &MainWindow::resetFile);
@@ -68,12 +70,14 @@ MainWindow::MainWindow(QWidget *parent)
     // deal with start/end captures and redrawing upon openFile
     connect(startCapture, &QAction::triggered, scribbler, &Scribbler::startCapture);
     connect(endCapture, &QAction::triggered, scribbler, &Scribbler::endCapture);
-    connect(this, &MainWindow::drawFromEvents, scribbler, &Scribbler::drawFromEvents);
 
     // When Scribbler::endCapture is triggured by menuBar action, scribbler responds with the events data.
     // With events data, process MouseEvents into QTableWidget
     connect(scribbler, &Scribbler::addTab, this, &MainWindow::addTab);
     connect(tabWidget, &QTabWidget::currentChanged, this, &MainWindow::changeTab); //TEST
+
+    // adjust opacity on tab selection
+    connect(this, &MainWindow::adjustOpacity, scribbler, &Scribbler::adjustOpacity);
 
     // view modes
     connect(lineViewAct, &QAction::triggered, scribbler, &Scribbler::showLines);
@@ -90,7 +94,8 @@ MainWindow::~MainWindow() {
 }
 
 void MainWindow::changeTab() {
-    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
+    int tabIdx = tabWidget->currentIndex();
+    emit adjustOpacity(tabIdx);
 }
 
 void MainWindow::addTab(QList<MouseEvent> &events) {
@@ -132,13 +137,13 @@ void MainWindow::addTab(QList<MouseEvent> &events) {
 
         // int to string mapping for actions
         switch (events[i].action) {
-            case 0:
-                actionText = "Click";
+            case MouseEvent::Press:
+                actionText = "Press";
                 break;
-            case 1:
+            case MouseEvent::Move:
                 actionText = "Move";
                 break;
-            case 2:
+            case MouseEvent::Release:
                 actionText = "Release";
                 break;
         }
@@ -166,9 +171,7 @@ void MainWindow::addTab(QList<MouseEvent> &events) {
     tabWidget->setHidden(false);
     tabWidget->show();
     ++tabCount;
-
-    // Adding a tab should ensure corresponding capture is redrwan at right opacity
-    emit drawFromEvents(storedEvents, tabWidget->currentIndex());
+    emit adjustOpacity(tabWidget->currentIndex());
 }
 
 void MainWindow::resetFile() {
@@ -294,13 +297,13 @@ void MainWindow::openFile() {
 
             // int to string mapping for actions
             switch (events->at(i).action) {
-            case 0:
-                actionText = "Click";
+            case MouseEvent::Press:
+                actionText = "Press";
                 break;
-            case 1:
+            case MouseEvent::Move:
                 actionText = "Move";
                 break;
-            case 2:
+            case MouseEvent::Release:
                 actionText = "Release";
                 break;
             }
